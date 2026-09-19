@@ -352,7 +352,7 @@ function cloudPostState_(){
     body:JSON.stringify(payload),
     cache:"no-store"
   }).catch(()=>{});
-  setTimeout(()=>pullCloudState_(false),350);
+  setTimeout(()=>pullCloudState_(false),200);
 }
 
 function scheduleCloudPush_(){
@@ -429,8 +429,8 @@ function scheduleNextCloudPull_(){
     cloudPollTimer=setTimeout(scheduleNextCloudPull_,5000);
     return;
   }
-  const base=state && state.status==="open" ? 800 : 5000;
-  const delay=base + (state && state.status==="open" ? Math.floor(Math.random()*220) : 0);
+  const base=state && state.status==="open" ? 550 : 5000;
+  const delay=base + (state && state.status==="open" ? Math.floor(Math.random()*150) : 0);
   cloudPollTimer=setTimeout(async()=>{
     await pullCloudState_(false);
     scheduleNextCloudPull_();
