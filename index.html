@@ -325,6 +325,7 @@ let cloudApplying=false;
 let cloudPushTimer=null;
 let cloudPullBusy=false;
 let lastCloudSnapshot="";
+const pendingAttendance=new Map();
 
 function normalizeState_(s){
   if(!s || typeof s!=="object") return null;
@@ -355,15 +356,35 @@ function cloudPostState_(){
   setTimeout(()=>pullCloudState_(false),200);
 }
 
+
+function cloudPostAttendance_(key,present,timestamp){
+  if(!cloudReady) return;
+  pendingAttendance.set(key,{present:!!present,timestamp:timestamp||"",until:Date.now()+5000});
+  fetch(CLOUD_API,{
+    method:"POST",
+    mode:"no-cors",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify({
+      action:"setAttendance",
+      key:key,
+      present:!!present,
+      timestamp:timestamp||new Date().toISOString()
+    }),
+    cache:"no-store"
+  }).catch(()=>{});
+  setTimeout(()=>pullCloudState_(false),180);
+  setTimeout(()=>pullCloudState_(false),650);
+}
+
 function scheduleCloudPush_(){
   if(!cloudReady || cloudApplying) return;
   clearTimeout(cloudPushTimer);
   cloudPushTimer=setTimeout(cloudPostState_,180);
 }
 
-function persist(){
+function persist(skipCloud=false){
   localStorage.setItem(K,JSON.stringify(state));
-  scheduleCloudPush_();
+  if(!skipCloud) scheduleCloudPush_();
 }
 
 function cloudJsonp_(){
@@ -401,6 +422,20 @@ async function pullCloudState_(initial=false){
       return;
     }
     const incoming=normalizeState_(res.state);
+
+    // Protect very recent attendance taps from being overwritten by a stale cloud read.
+    for(const [k,p] of pendingAttendance.entries()){
+      const cloudHas=!!incoming.attendance[k];
+      if(cloudHas===p.present){
+        pendingAttendance.delete(k);
+      }else if(Date.now()<p.until){
+        if(p.present) incoming.attendance[k]=p.timestamp||state.attendance[k]||new Date().toISOString();
+        else delete incoming.attendance[k];
+      }else{
+        pendingAttendance.delete(k);
+      }
+    }
+
     const snap=JSON.stringify(incoming);
     if(snap!==lastCloudSnapshot && snap!==JSON.stringify(state)){
       cloudApplying=true;
@@ -658,11 +693,19 @@ function renderNames(){
    if(state.status!=="open"){toast("現時未開放點名");return;}
    const t=currentParticipants().find(x=>keyOf(x)===btn.dataset.key),k=keyOf(t);
    if(state.attendance[k]){
-     if(confirm(`「${t.name}」已完成點名。要取消嗎？`)){delete state.attendance[k];persist();render();toast("已取消點名");}
+     if(confirm(`「${t.name}」已完成點名。要取消嗎？`)){
+       delete state.attendance[k];
+       persist(true);
+       render();
+       cloudPostAttendance_(k,false,"");
+       toast("已取消點名");
+     }
    }else{
-     state.attendance[k]=new Date().toISOString();
-     persist();
+     const ts=new Date().toISOString();
+     state.attendance[k]=ts;
+     persist(true);
      render();
+     cloudPostAttendance_(k,true,ts);
      toast("🌟 點名成功");
    }
  });
