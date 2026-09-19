@@ -352,6 +352,7 @@ function cloudPostState_(){
     body:JSON.stringify(payload),
     cache:"no-store"
   }).catch(()=>{});
+  setTimeout(()=>pullCloudState_(false),700);
 }
 
 function scheduleCloudPush_(){
@@ -421,14 +422,33 @@ async function pullCloudState_(initial=false){
   }
 }
 
+let cloudPollTimer=null;
+function scheduleNextCloudPull_(){
+  clearTimeout(cloudPollTimer);
+  if(document.hidden){
+    cloudPollTimer=setTimeout(scheduleNextCloudPull_,5000);
+    return;
+  }
+  const delay=state && state.status==="open" ? 1200 : 5000;
+  cloudPollTimer=setTimeout(async()=>{
+    await pullCloudState_(false);
+    scheduleNextCloudPull_();
+  },delay);
+}
 async function initCloudSync_(){
   await pullCloudState_(true);
   cloudReady=true;
-  setInterval(()=>pullCloudState_(false),3000);
+  scheduleNextCloudPull_();
   document.addEventListener("visibilitychange",()=>{
-    if(!document.hidden) pullCloudState_(false);
+    if(!document.hidden){
+      pullCloudState_(false);
+      scheduleNextCloudPull_();
+    }
   });
-  window.addEventListener("focus",()=>pullCloudState_(false));
+  window.addEventListener("focus",()=>{
+    pullCloudState_(false);
+    scheduleNextCloudPull_();
+  });
 }
 
 function localDateString(d=new Date()){
