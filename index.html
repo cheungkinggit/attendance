@@ -24,7 +24,7 @@ body{min-height:100vh} button,input,textarea{font:inherit} button{cursor:pointer
 .statusline{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .attendance-summary{display:flex;align-items:center;gap:7px;margin-top:7px}
 .attendance-label{font-size:10px;font-weight:900;opacity:.9}
-.attendance-count{font-size:18px;font-weight:950;line-height:1;background:#fff;color:#14825d;border-radius:999px;padding:5px 9px;box-shadow:0 4px 12px rgba(20,130,93,.14)} .pill{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.16);font-size:12px;font-weight:800}
+.attendance-count{font-size:18px;font-weight:950;line-height:1;background:#fff;color:#14825d;border-radius:999px;padding:5px 9px;box-shadow:0 4px 12px rgba(20,130,93,.14)}.all-present-badge{font-size:11px;font-weight:950;background:#ffe36b;color:#6d5600;border-radius:999px;padding:5px 8px;box-shadow:0 4px 10px rgba(109,86,0,.12)} .pill{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.16);font-size:12px;font-weight:800}
 .dot{width:8px;height:8px;border-radius:50%;background:#d6d9e3} .dot.open{background:#7af0aa;box-shadow:0 0 0 4px rgba(122,240,170,.15)} .dot.closed{background:#ffd3d8}
 .card{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:12px;margin:8px 0}
 .event-title,.meta,.detail{display:none}
@@ -118,7 +118,7 @@ body{min-height:100vh} button,input,textarea{font:inherit} button{cursor:pointer
       </div>
       <div class="attendance-summary">
         <span class="attendance-label">出席人數</span>
-        <span id="heroAttendanceCount" class="attendance-count">0/0</span>
+        <span id="heroAttendanceCount" class="attendance-count">0/0</span><span id="allPresentBadge" class="all-present-badge" style="display:none">到齊</span>
       </div>
       </div>
     </div>
@@ -269,6 +269,7 @@ const heroEventDetail=document.getElementById("heroEventDetail");
 const responsiblePill=document.getElementById("responsiblePill");
 const responsibleText=document.getElementById("responsibleText");
 const heroAttendanceCount=document.getElementById("heroAttendanceCount");
+const allPresentBadge=document.getElementById("allPresentBadge");
 const historyList=document.getElementById("historyList");
 const newActivityBtn=document.getElementById("newActivityBtn");
 const eventSaveState=document.getElementById("eventSaveState");
@@ -641,7 +642,7 @@ function render(){
    Object.keys(state.attendance||{}).forEach(k=>stickyAttendance.add(k));
  }
  heroEventName.textContent=e.name||"未設定活動";heroEventDate.textContent=fmtDate(e.date);heroEventTime.textContent=e.time||"—";heroEventDetail.textContent=e.detail||"請等候管理員設定活動資料。";
- countTop.textContent=`${present} / ${total}`;heroAttendanceCount.textContent=`${present}/${total}`;
+ countTop.textContent=`${present} / ${total}`;heroAttendanceCount.textContent=`${present}/${total}`;allPresentBadge.style.display=(total>0&&present===total)?"inline-flex":"none";
  statusDot.className="dot";
  if(state.status==="open"){
    statusDot.classList.add("open");statusText.textContent="點名進行中";hintText.textContent="";
