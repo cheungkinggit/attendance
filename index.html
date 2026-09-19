@@ -326,6 +326,8 @@ let cloudPushTimer=null;
 let cloudPullBusy=false;
 let lastCloudSnapshot="";
 const pendingAttendance=new Map();
+let stickyEventKey="";
+const stickyAttendance=new Set();
 
 function normalizeState_(s){
   if(!s || typeof s!=="object") return null;
@@ -359,7 +361,7 @@ function cloudPostState_(){
 
 function cloudPostAttendance_(key,present,timestamp){
   if(!cloudReady) return;
-  pendingAttendance.set(key,{present:!!present,timestamp:timestamp||"",until:Date.now()+5000});
+  pendingAttendance.set(key,{present:!!present,timestamp:timestamp||"",until:Date.now()+15000});
   fetch(CLOUD_API,{
     method:"POST",
     mode:"no-cors",
@@ -423,6 +425,21 @@ async function pullCloudState_(initial=false){
     }
     const incoming=normalizeState_(res.state);
 
+    const incomingEventKey=[incoming.event?.name||"",incoming.event?.date||"",incoming.event?.time||""].join("|");
+    const localEventKey=[state.event?.name||"",state.event?.date||"",state.event?.time||""].join("|");
+
+    // Reset sticky attendance only when moving to a different activity.
+    if(stickyEventKey!==incomingEventKey){
+      stickyAttendance.clear();
+      stickyEventKey=incomingEventKey;
+    }
+
+    // Remember every confirmed/locally-seen attendance during the same active activity.
+    if(incoming.status==="open"){
+      Object.keys(state.attendance||{}).forEach(k=>stickyAttendance.add(k));
+      Object.keys(incoming.attendance||{}).forEach(k=>stickyAttendance.add(k));
+    }
+
     // Protect very recent attendance taps from being overwritten by a stale cloud read.
     for(const [k,p] of pendingAttendance.entries()){
       const cloudHas=!!incoming.attendance[k];
@@ -434,6 +451,18 @@ async function pullCloudState_(initial=false){
       }else{
         pendingAttendance.delete(k);
       }
+    }
+
+    // During an active activity, never let an older cloud snapshot turn
+    // a teacher from "出席" back to "未點名".
+    if(incoming.status==="open" && incomingEventKey===localEventKey){
+      stickyAttendance.forEach(k=>{
+        const pending=pendingAttendance.get(k);
+        if(pending && pending.present===false) return;
+        if(!incoming.attendance[k] && state.attendance[k]){
+          incoming.attendance[k]=state.attendance[k];
+        }
+      });
     }
 
     const snap=JSON.stringify(incoming);
@@ -606,6 +635,11 @@ function avatarText(t){return t.code&&t.code!=="—"?t.code:(t.name==="Stephen"?
 
 function render(){
  const participants=currentParticipants(),total=participants.length,present=participants.filter(t=>state.attendance[keyOf(t)]).length,e=state.event;
+ const ek=[e?.name||"",e?.date||"",e?.time||""].join("|");
+ if(state.status==="open"){
+   if(stickyEventKey!==ek){stickyAttendance.clear();stickyEventKey=ek;}
+   Object.keys(state.attendance||{}).forEach(k=>stickyAttendance.add(k));
+ }
  heroEventName.textContent=e.name||"未設定活動";heroEventDate.textContent=fmtDate(e.date);heroEventTime.textContent=e.time||"—";heroEventDetail.textContent=e.detail||"請等候管理員設定活動資料。";
  countTop.textContent=`${present} / ${total}`;heroAttendanceCount.textContent=`${present}/${total}`;
  statusDot.className="dot";
@@ -695,6 +729,7 @@ function renderNames(){
    if(state.attendance[k]){
      if(confirm(`「${t.name}」已完成點名。要取消嗎？`)){
        delete state.attendance[k];
+       stickyAttendance.delete(k);
        persist(true);
        render();
        cloudPostAttendance_(k,false,"");
@@ -703,6 +738,8 @@ function renderNames(){
    }else{
      const ts=new Date().toISOString();
      state.attendance[k]=ts;
+     stickyAttendance.add(k);
+     stickyEventKey=[state.event?.name||"",state.event?.date||"",state.event?.time||""].join("|");
      persist(true);
      render();
      cloudPostAttendance_(k,true,ts);
